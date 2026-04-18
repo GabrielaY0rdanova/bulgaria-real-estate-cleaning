@@ -14,7 +14,7 @@ A sequential Python cleaning pipeline for raw real estate listings scraped from 
 
 Takes two flat CSVs (sales + rentals) as input and produces eight normalised, validated relational tables ready for PostgreSQL. Handles field parsing, Bulgarian-to-English translation and transliteration, deduplication, outlier flagging, and a pre-export validation gate.
 
-Part of a larger **Real Estate Data Platform**: `real_estate_scraper` → `real_estate_cleaning` → `real_estate_analysis` → `real_estate_dashboard`
+Part of a larger **Real Estate Data Platform**: [`real_estate_scraper`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-scraper) → [`real_estate_cleaning`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-cleaning) → [`real_estate_analysis`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-analysis) → `real_estate_visualization`
 
 ---
 
@@ -249,9 +249,9 @@ python scripts/07_validate.py && python scripts/08_export.py
 This cleaning pipeline is Stage 2 of a four-stage data platform:
 
 - ✅ **`bulgaria-real-estate-scraper`** — Scraping 199,496 listings from imot.bg
-- 🧹 **`bulgaria-real-estate-cleaning`** — You are here
+- ✅ **`bulgaria-real-estate-cleaning`** — You are here
 - 🔍 **`bulgaria-real-estate-analysis`** — Price trends, regional comparisons, market insights
-- 📊 **`bulgaria-real-estate-dashboard`** — Interactive Power BI dashboard
+- 📊 **`bulgaria-real-estate-visualization`** — Interactive Power BI dashboard
 
 ---
 
@@ -259,11 +259,9 @@ This cleaning pipeline is Stage 2 of a four-stage data platform:
 
 Hi! I'm [Gabriela Yordanova](https://www.linkedin.com/in/gabriela-yordanova-837ba2124/). Check out my full portfolio 🗂️ [here](https://gabrielay0rdanova.github.io/).
 
-I have nearly 3 years of experience as a real estate agent across multiple agencies, which gives me genuine domain expertise in how the Bulgarian property market works — how listings are priced, what drives demand, and what the data actually means.
+Nearly 3 years as a real estate agent taught me what messy property data looks like from the inside — duplicate listings, inconsistent field usage, price-on-request conventions — which made the cleaning decisions here grounded rather than guesswork.
 
-This project is part of a four-stage **Real Estate Data Platform** I'm building end-to-end, demonstrating my skills in **Python, data engineering, and pipeline design**.
-
-*This project is part of my portfolio showcasing data engineering and pipeline skills.*
+This project is Stage 2 of a four-stage **Real Estate Data Platform** I'm building end-to-end. The cleaning pipeline normalises messy scraped data into a fully relational schema with 8 tables, deduplication, and a PostgreSQL load — demonstrating my skills in **Python, data modelling, and data engineering**.
 
 ---
 
