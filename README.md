@@ -248,10 +248,10 @@ python scripts/07_validate.py && python scripts/08_export.py
 
 This cleaning pipeline is Stage 2 of a four-stage data platform:
 
-- ✅ **`bulgaria-real-estate-scraper`** — Scraping 199,496 listings from imot.bg
-- ✅ **`bulgaria-real-estate-cleaning`** — You are here
-- 🔍 **`bulgaria-real-estate-analysis`** — Price trends, regional comparisons, market insights
-- 📊 **`bulgaria-real-estate-visualization`** — Interactive Power BI dashboard
+- ✅ `bulgaria-real-estate-scraper` — Scraping 199,496 listings from imot.bg
+- ✅ `bulgaria-real-estate-cleaning` — You are here
+- ✅ `bulgaria-real-estate-analysis` — Price distributions, geographic patterns, and feature uplift analysis
+- ✅ `bulgaria-real-estate-visualization` — Interactive Power BI dashboard
 
 ---
 
