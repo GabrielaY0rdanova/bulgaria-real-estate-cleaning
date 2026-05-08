@@ -21,10 +21,12 @@ DOCS_PATH.mkdir(exist_ok=True)
 prodazhbi_files = list(DATA_PATH.glob("prodazhbi_*.csv"))
 naemi_files = list(DATA_PATH.glob("naemi_*.csv"))
 
-if len(prodazhbi_files) != 1:
-    raise FileNotFoundError(f"Expected exactly one prodazhbi CSV, found: {prodazhbi_files}")
-if len(naemi_files) != 1:
-    raise FileNotFoundError(f"Expected exactly one naemi CSV, found: {naemi_files}")
+if len(prodazhbi_files) == 0:
+    raise FileNotFoundError("No prodazhbi CSV found in data/raw/")
+if len(naemi_files) == 0:
+    raise FileNotFoundError("No naemi CSV found in data/raw/")
+prodazhbi_files = [max(prodazhbi_files, key=lambda p: p.stat().st_mtime)]
+naemi_files = [max(naemi_files, key=lambda p: p.stat().st_mtime)]
 
 df_prod = pd.read_csv(prodazhbi_files[0], low_memory=False)
 df_naem = pd.read_csv(naemi_files[0], low_memory=False)

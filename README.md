@@ -8,6 +8,7 @@
 [![Kaggle](https://img.shields.io/badge/Kaggle-Dataset-orange?logo=kaggle&logoColor=white)](https://www.kaggle.com/datasets/gabrielagencheva/bulgaria-real-estate-listings/)
 [![License](https://img.shields.io/badge/License-MIT-lightgrey)](LICENSE.txt)
 
+
 ## 📖 Overview
 
 A sequential Python cleaning pipeline for raw real estate listings scraped from [imot.bg](https://www.imot.bg) by the [bulgaria-real-estate-scraper](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-scraper).
@@ -16,19 +17,20 @@ Takes two flat CSVs (sales + rentals) as input and produces eight normalised, va
 
 Part of a larger **Real Estate Data Platform**: [`real_estate_scraper`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-scraper) → [`real_estate_cleaning`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-cleaning) → [`real_estate_analysis`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-analysis) → `real_estate_visualization`
 
----
 
 ## 📊 Dataset
 
-| File | Rows | Transaction type |
-|---|---|---|
-| `prodazhbi_06_04_2026.csv` | 160,886 | Sales |
-| `naemi_10_04_2026.csv` | 38,610 | Rentals |
+| File | Rows | Transaction type | Run |
+|---|---|---|---|
+| `prodazhbi_06_04_2026.csv` | 160,886 | Sales | Full scrape |
+| `naemi_10_04_2026.csv` | 38,610 | Rentals | Full scrape |
+| `prodazhbi_05_05_2026.csv` | 45,186 | Sales | Incremental update |
+| `naemi_07_05_2026.csv` | 19,038 | Rentals | Incremental update |
 
-Combined input: **199,496 rows** — deduplicated to **192,004 unique listings** across 8 normalised tables.
+Combined input: **263,720 rows** — deduplicated to **61,487 unique listings** across 9 normalised tables.
 
 The raw and cleaned datasets are published on Kaggle: [Bulgaria Real Estate Listings](https://www.kaggle.com/datasets/gabrielagencheva/bulgaria-real-estate-listings)
----
+
 
 ## 🗂️ Project Structure
 
@@ -59,7 +61,6 @@ bulgaria-real-estate-cleaning/
 └── README.md
 ```
 
----
 
 ## 🏗️ Pipeline Architecture
 
@@ -84,7 +85,7 @@ raw CSVs
 05_flag_outliers.py   — IQR outlier flags, no rows removed → df_flagged.pkl
    │
    ▼
-06_normalize.py       — split into 8 relational tables → CSVs
+06_normalize.py       — split into 9 relational tables → CSVs
    │
    ▼
 07_validate.py        — 3-tier validation gate, blocks export on failure
@@ -93,7 +94,6 @@ raw CSVs
 08_export.py          — bulk COPY into PostgreSQL, post-load row count check
 ```
 
----
 
 ## 🗃️ Schema
 
@@ -103,16 +103,16 @@ Eight tables in PostgreSQL. See `scripts/00_schema.sql` for full DDL.
 
 | Table | Rows | Description |
 |---|---|---|
-| `geographies` | ~4,253 | Hierarchical: region → locality → area |
+| `geographies` | 3,285 | Hierarchical: region → locality → area |
 | `construction_types` | 6 | Lookup — brick, panel, timber frame, etc. |
 | `property_types` | 46 | Lookup — apartment, house, office, plot, etc. |
 | `features` | 46 | Lookup — elevator, furnished, parking, etc. |
-| `contacts` | ~23,449 | Deduplicated agencies and owners |
-| `properties` | ~192,004 | Physical asset — area, floor, year built, etc. |
-| `listings` | ~192,004 | Advertisement — price, status, dates, URL |
-| `property_features` | ~444,084 | Many-to-many: properties ↔ features |
+| `contacts` | 15,315 | Deduplicated agencies and owners |
+| `properties` | 61,487 | Physical asset — area, floor, year built, etc. |
+| `listings` | 61,487 | Advertisement — price, status, dates, URL |
+| `property_features` | 159,014 | Many-to-many: properties ↔ features |
+| `price_history` | 323 | Price changes detected between scraper runs |
 
----
 
 ## 🔄 What Each Script Does
 
@@ -164,7 +164,6 @@ Three tiers of checks. Exits non-zero on any Tier 1 or Tier 2 failure, blocking 
 | Tier 2 — Business rules | price ↔ price_on_request, floor parity, date ordering, year range, etc. | Blocking |
 | Tier 3 — Distribution sanity | Null rate bounds, price range by transaction type, row count parity | Warning only |
 
----
 
 ## 🚀 How to Run
 
@@ -222,7 +221,6 @@ python scripts/07_validate.py && python scripts/08_export.py
 
 `07_validate.py` must pass before `08_export.py` runs. The `&&` operator enforces this — export is skipped automatically if validation fails.
 
----
 
 ## 🛠️ Technologies Used
 
@@ -232,7 +230,6 @@ python scripts/07_validate.py && python scripts/08_export.py
 - **python-dotenv** — database credentials management
 - **PostgreSQL 16** — target database with full relational schema
 
----
 
 ## 💡 Notes
 
@@ -242,18 +239,16 @@ python scripts/07_validate.py && python scripts/08_export.py
 - **Bulgarian phone numbers** — both mobile (10 digits, 08x/09x) and landline (9 digits, 02x/03x) formats are normalised to a canonical leading-zero string. Numbers masked by imot.bg (ending in `000000`) are set to null.
 - **Geography transliteration** — region, locality, and area names are stored in both Cyrillic (`name_bg` in CSVs) and Latin script (`name_en`) using Bulgaria's official Streamlined Transliteration System. The DDL `geographies.name` column stores the Cyrillic form.
 
----
 
 ## 🚀 Upcoming Projects
 
 This cleaning pipeline is Stage 2 of a four-stage data platform:
 
-- ✅ `bulgaria-real-estate-scraper` — Scraping 199,496 listings from imot.bg
+- ✅ `bulgaria-real-estate-scraper` — Scraping 263,720 listings from imot.bg across two runs
 - ✅ `bulgaria-real-estate-cleaning` — You are here
 - ✅ `bulgaria-real-estate-analysis` — Price distributions, geographic patterns, and feature uplift analysis
 - ✅ `bulgaria-real-estate-visualization` — Interactive Power BI dashboard
 
----
 
 ## 👩‍💻 About Me
 
@@ -261,9 +256,8 @@ Hi! I'm [Gabriela Yordanova](https://www.linkedin.com/in/gabriela-yordanova-837b
 
 Nearly 3 years as a real estate agent taught me what messy property data looks like from the inside — duplicate listings, inconsistent field usage, price-on-request conventions — which made the cleaning decisions here grounded rather than guesswork.
 
-This project is Stage 2 of a four-stage **Real Estate Data Platform** I'm building end-to-end. The cleaning pipeline normalises messy scraped data into a fully relational schema with 8 tables, deduplication, and a PostgreSQL load — demonstrating my skills in **Python, data modelling, and data engineering**.
+This project is Stage 2 of a four-stage **Real Estate Data Platform** I'm building end-to-end. The cleaning pipeline normalises messy scraped data into a fully relational schema with 9 tables (including price history tracking), upsert-based incremental loading, and a PostgreSQL export — demonstrating my skills in **Python, data modelling, and data engineering**.
 
----
 
 ## 🛡️ License
 

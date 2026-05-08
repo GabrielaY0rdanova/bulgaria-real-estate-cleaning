@@ -19,13 +19,13 @@ naemi_files = list(DATA_PATH.glob("naemi_*.csv"))
 # Validate exactly one file exists for each type
 if len(prodazhbi_files) == 0:
     raise FileNotFoundError("No prodazhbi CSV found in data/raw/")
-if len(prodazhbi_files) > 1:
-    raise ValueError(f"Multiple prodazhbi CSVs found: {prodazhbi_files}")
 
 if len(naemi_files) == 0:
     raise FileNotFoundError("No naemi CSV found in data/raw/")
-if len(naemi_files) > 1:
-    raise ValueError(f"Multiple naemi CSVs found: {naemi_files}")
+
+# On incremental runs multiple files will exist — use the most recent one.
+prodazhbi_files = [max(prodazhbi_files, key=lambda p: p.stat().st_mtime)]
+naemi_files = [max(naemi_files, key=lambda p: p.stat().st_mtime)]
 
 # Only agency_phone is present in the raw CSVs — the others are listed here
 # defensively in case future scraper versions add them. pandas silently

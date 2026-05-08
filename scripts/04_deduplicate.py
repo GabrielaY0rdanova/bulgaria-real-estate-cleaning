@@ -3,7 +3,7 @@
 # Source: df_clean.pkl (output of 03_clean_fields.py)
 # Purpose: Deduplicate listings by source_id, keeping the row with the latest
 #          scraped_at. Populates date_last_checked. Sets status_changed_at to
-#          NULL (first load — no status flip has occurred yet).
+#          NULL on first load; on incremental runs, sets it only when status flips.
 # Task:    10
 # Run after: 03_clean_fields.py
 # =============================================================================
@@ -56,6 +56,36 @@ if meaningful_ids:
         print(f"    source_id={sid} | diff cols: {diff_cols}")
 
 # =============================================================================
+# PRICE HISTORY — capture price changes before dedup
+# For every source_id that appears more than once with different prices,
+# record the old price, new price, and when the change was detected.
+# listing_id is not available yet — 06_normalize.py will join it in.
+# =============================================================================
+
+price_history_rows = []
+
+for sid, group in dupe_groups:
+    if "price" not in [c for c in check_cols if group[c].nunique() > 1]:
+        continue
+    group_sorted = group.sort_values("scraped_at")
+    old_row = group_sorted.iloc[0]
+    new_row = group_sorted.iloc[-1]
+    old_price = old_row["price"]
+    new_price = new_row["price"]
+    if old_price != new_price:
+        price_history_rows.append({
+            "source_id":  sid,
+            "old_price":  old_price,
+            "new_price":  new_price,
+            "changed_at": new_row["scraped_at"],
+        })
+
+df_price_history_staging = pd.DataFrame(price_history_rows)
+staging_path = CLEAN_PATH / "df_price_history_staging.pkl"
+df_price_history_staging.to_pickle(staging_path)
+print(f"\nPrice history staging: {len(df_price_history_staging):,} price changes captured")
+
+# =============================================================================
 # DEDUPLICATE — keep row with latest scraped_at per source_id
 # =============================================================================
 
@@ -64,13 +94,12 @@ if meaningful_ids:
 df = df.sort_values("scraped_at", ascending=False)
 df_dedup = df.drop_duplicates(subset=["source_id"], keep="first").copy()
 
-# Rename scraped_at → date_last_checked to reflect its role in the schema
-# The original scraped_at is preserved as-is (it is the scraped_at of the
-# kept row, which is also the latest scraped_at in the group)
+# date_last_checked = scraped_at of the latest row kept after dedup.
 df_dedup["date_last_checked"] = df_dedup["scraped_at"]
 
 # status_changed_at — NULL on first load.
-# Populated only when a listing transitions active ↔ inactive in future runs.
+# On incremental runs, the upsert in 08_export.py sets this only when
+# status flips between active and inactive.
 df_dedup["status_changed_at"] = pd.NaT
 
 print(f"\nAfter dedup: {len(df_dedup):,} rows")

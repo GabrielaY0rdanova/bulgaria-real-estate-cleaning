@@ -687,6 +687,26 @@ print("✓ source_id is unique in listings")
 
 # 8. Row counts add up
 print(f"\n=== FINAL TABLE SIZES ===")
+# =============================================================================
+# TABLE 9 — price_history
+# =============================================================================
+
+staging_path = CLEAN_PATH / "df_price_history_staging.pkl"
+if staging_path.exists():
+    df_ph_staging = pd.read_pickle(staging_path)
+    sid_to_lid = dict(zip(df_listings["source_id"], df_listings["listing_id"]))
+    df_ph_staging["listing_id"] = df_ph_staging["source_id"].map(sid_to_lid)
+    df_price_history = df_ph_staging.dropna(subset=["listing_id"])[
+        ["listing_id", "old_price", "new_price", "changed_at"]
+    ].copy()
+    df_price_history["listing_id"] = df_price_history["listing_id"].astype(int)
+else:
+    df_price_history = pd.DataFrame(
+        columns=["listing_id", "old_price", "new_price", "changed_at"]
+    )
+
+print(f"price_history rows: {len(df_price_history):,}")
+
 tables = {
     "geographies":        df_geographies,
     "construction_types": df_construction_types,
@@ -696,6 +716,7 @@ tables = {
     "properties":         df_properties,
     "listings":           df_listings,
     "property_features":  df_property_features,
+    "price_history":      df_price_history,
 }
 for name, table in tables.items():
     print(f"  {name:<22} {len(table):>8,} rows  |  {len(table.columns)} cols")

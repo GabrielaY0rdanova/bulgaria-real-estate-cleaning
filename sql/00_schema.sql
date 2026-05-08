@@ -212,3 +212,20 @@ CREATE TABLE property_features (
 
     CONSTRAINT pk_property_features PRIMARY KEY (property_id, feature_id)
 );
+
+-- =============================================================================
+-- price_history
+-- Purpose: Tracks price changes detected between scraper runs
+-- =============================================================================
+
+CREATE TABLE price_history (
+    history_id   INT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    listing_id   INT NOT NULL,
+    old_price    NUMERIC(12,2),
+    new_price    NUMERIC(12,2),
+    changed_at   TIMESTAMP NOT NULL,
+
+    CONSTRAINT fk_price_history_listings
+        FOREIGN KEY (listing_id)
+        REFERENCES listings(listing_id)
+);
