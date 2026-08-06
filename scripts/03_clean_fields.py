@@ -48,6 +48,12 @@ df_naem["transaction_type"] = "rental"
 
 df = pd.concat([df_prod, df_naem], ignore_index=True)
 
+# Drop rows where the scraper failed to extract data (property_type == "unknown").
+unknown_mask = df["property_type"] == "unknown"
+if unknown_mask.any():
+    print(f"Dropping {unknown_mask.sum():,} rows with property_type == 'unknown' (failed scrapes)")
+    df = df[~unknown_mask].reset_index(drop=True)
+
 print(f"Loaded: {len(df):,} rows ({len(df_prod):,} sales + {len(df_naem):,} rentals)")
 
 # =============================================================================

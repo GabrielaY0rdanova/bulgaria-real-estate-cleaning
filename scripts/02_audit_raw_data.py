@@ -37,6 +37,12 @@ df_naem["transaction_type"] = "rental"
 
 df_staging = pd.concat([df_prod, df_naem], ignore_index=True)
 
+# Drop rows where the scraper failed to extract data (property_type == "unknown").
+unknown_mask = df_staging["property_type"] == "unknown"
+if unknown_mask.any():
+    print(f"Dropping {unknown_mask.sum():,} rows with property_type == 'unknown' (failed scrapes)")
+    df_staging = df_staging[~unknown_mask].reset_index(drop=True)
+
 print(f"Staging rows: {len(df_staging):,}  |  prodazhbi: {len(df_prod):,}  |  naemi: {len(df_naem):,}")
 
 # =============================================================================
@@ -140,8 +146,8 @@ for url in df_staging["listing_url"].dropna().head(3):
 lines.append("```")
 
 lines.append(subsection("scraped_at — range"))
-lines.append(f"- Min: `{df_staging['scraped_at'].min()}`")
-lines.append(f"- Max: `{df_staging['scraped_at'].max()}`")
+lines.append(f"- Min: `{df_staging['scraped_at'].dropna().min()}`")
+lines.append(f"- Max: `{df_staging['scraped_at'].dropna().max()}`")
 lines.append(f"- Unique dates: {df_staging['scraped_at'].nunique():,}")
 
 # -----------------------------------------------------------------------------

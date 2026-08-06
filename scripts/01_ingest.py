@@ -71,5 +71,12 @@ print(f"Total rows after merge: {actual_rows}")
 if actual_rows != expected_rows:
     raise ValueError("Row count mismatch after concatenation")
 
+# Drop rows where the scraper failed to extract data (property_type == "unknown").
+# These rows also have null region/status/price/poster_type/has_photos/scraped_at.
+unknown_mask = df_staging["property_type"] == "unknown"
+if unknown_mask.any():
+    print(f"Dropping {unknown_mask.sum():,} rows with property_type == 'unknown' (failed scrapes)")
+    df_staging = df_staging[~unknown_mask].reset_index(drop=True)
+
 print(df_staging.info())
 print(df_staging.head())
