@@ -9,9 +9,22 @@
 # =============================================================================
 
 from pathlib import Path
+import json
 import pandas as pd
 
 CLEAN_PATH = Path("data/clean")
+WORK_PATH = Path("data/work")
+
+context_path = WORK_PATH / "run_context.json"
+if not context_path.is_file():
+    raise FileNotFoundError("Missing data/work/run_context.json. Run 01_ingest.py first.")
+with context_path.open(encoding="utf-8") as file:
+    run_context = json.load(file)
+if run_context.get("mode") != "full_rebuild":
+    raise RuntimeError(
+        "06_normalize.py currently supports full_rebuild mode only. "
+        "Incremental runs require the database-aware updater."
+    )
 CLEAN_PATH.mkdir(exist_ok=True)
 
 # =============================================================================
@@ -686,7 +699,7 @@ assert df_listings["source_id"].is_unique, "source_id is not unique in listings"
 print("✓ source_id is unique in listings")
 
 # 8. Row counts add up
-print(f"\n=== FINAL TABLE SIZES ===")
+print("\n=== FINAL TABLE SIZES ===")
 # =============================================================================
 # TABLE 9 — price_history
 # =============================================================================

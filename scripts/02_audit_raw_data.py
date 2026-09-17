@@ -8,42 +8,33 @@
 # =============================================================================
 
 from pathlib import Path
+import json
 import pandas as pd
 
 # =============================================================================
-# LOAD — replicate ingest to produce df_staging
+# LOAD — use the exact staging artifact produced by 01_ingest.py
 # =============================================================================
 
-DATA_PATH = Path("data/raw")
+WORK_PATH = Path("data/work")
 DOCS_PATH = Path("docs")
 DOCS_PATH.mkdir(exist_ok=True)
 
-prodazhbi_files = list(DATA_PATH.glob("prodazhbi_*.csv"))
-naemi_files = list(DATA_PATH.glob("naemi_*.csv"))
+staging_path = WORK_PATH / "df_staging.pkl"
+if not staging_path.is_file():
+    raise FileNotFoundError("Missing data/work/df_staging.pkl. Run 01_ingest.py first.")
+df_staging = pd.read_pickle(staging_path)
+context_path = WORK_PATH / "run_context.json"
+if not context_path.is_file():
+    raise FileNotFoundError("Missing data/work/run_context.json. Run 01_ingest.py first.")
+with context_path.open(encoding="utf-8") as file:
+    run_context = json.load(file)
 
-if len(prodazhbi_files) == 0:
-    raise FileNotFoundError("No prodazhbi CSV found in data/raw/")
-if len(naemi_files) == 0:
-    raise FileNotFoundError("No naemi CSV found in data/raw/")
-prodazhbi_files = [max(prodazhbi_files, key=lambda p: p.stat().st_mtime)]
-naemi_files = [max(naemi_files, key=lambda p: p.stat().st_mtime)]
-
-df_prod = pd.read_csv(prodazhbi_files[0], low_memory=False)
-df_naem = pd.read_csv(naemi_files[0], low_memory=False)
-
-# transaction_type already exists in the CSVs — normalize to sale/rental
-df_prod["transaction_type"] = "sale"
-df_naem["transaction_type"] = "rental"
-
-df_staging = pd.concat([df_prod, df_naem], ignore_index=True)
-
-# Drop rows where the scraper failed to extract data (property_type == "unknown").
-unknown_mask = df_staging["property_type"] == "unknown"
-if unknown_mask.any():
-    print(f"Dropping {unknown_mask.sum():,} rows with property_type == 'unknown' (failed scrapes)")
-    df_staging = df_staging[~unknown_mask].reset_index(drop=True)
-
-print(f"Staging rows: {len(df_staging):,}  |  prodazhbi: {len(df_prod):,}  |  naemi: {len(df_naem):,}")
+transaction_counts = df_staging["transaction_type"].value_counts().to_dict()
+print(
+    f"Staging rows: {len(df_staging):,} | "
+    f"sales: {transaction_counts.get('sale', 0):,} | "
+    f"rentals: {transaction_counts.get('rental', 0):,}"
+)
 
 # =============================================================================
 # HELPERS
@@ -94,8 +85,13 @@ lines = []
 # Header
 # -----------------------------------------------------------------------------
 lines.append("# Audit Report — Raw Staging Data")
-lines.append(f"\n**Source files:** `{prodazhbi_files[0].name}` + `{naemi_files[0].name}`")
-lines.append(f"**Total rows:** {len(df_staging):,} ({len(df_prod):,} sales + {len(df_naem):,} rentals)  ")
+lines.append(f"\n**Run ID:** `{run_context['run_id']}`")
+lines.append(f"**Run directory:** `{run_context['run_dir']}`")
+lines.append(
+    f"**Total rows:** {len(df_staging):,} "
+    f"({transaction_counts.get('sale', 0):,} sales + "
+    f"{transaction_counts.get('rental', 0):,} rentals)  "
+)
 lines.append(f"**Total columns:** {len(df_staging.columns)}")
 
 # -----------------------------------------------------------------------------

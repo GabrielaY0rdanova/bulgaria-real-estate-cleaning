@@ -46,7 +46,13 @@ bulgaria-real-estate-cleaning/
 │   ├── 05_flag_outliers.py     # Flag price / area / year_built outliers → df_flagged.pkl
 │   ├── 06_normalize.py         # Split into 8 relational tables → CSVs
 │   ├── 07_validate.py          # Pre-export validation gate → validation_report.md
-│   └── 08_export.py            # Bulk COPY into PostgreSQL
+│   ├── 08_export.py            # Full rebuild export only
+│   └── 09_incremental_export.py # Dry-run or transactional monthly update
+│
+├── pipeline/                   # Input contract, staging and DB update logic
+├── sql/
+│   ├── 00_schema.sql           # PostgreSQL tables and constraints
+│   └── 01_incremental_runs.sql # Applied-run ledger
 │
 ├── data/
 │   ├── raw/                    # Input CSVs from scraper (gitignored, on Kaggle)
@@ -207,10 +213,10 @@ PGPASSWORD=your_password
 PGDATABASE=your_database
 ```
 
-### 5. Run the pipeline
+### 5. Run a full rebuild
 
 ```bash
-python scripts/01_ingest.py
+python scripts/01_ingest.py --full-file data/raw/prodazhbi_06_04_2026.csv --full-file data/raw/naemi_10_04_2026.csv --full-file data/raw/prodazhbi_05_05_2026.csv --full-file data/raw/naemi_07_05_2026.csv --full-file data/raw/prodazhbi_27_07_2026.csv --full-file data/raw/naemi_29_07_2026.csv
 python scripts/02_audit_raw_data.py
 python scripts/03_clean_fields.py
 python scripts/04_deduplicate.py
@@ -220,6 +226,40 @@ python scripts/07_validate.py && python scripts/08_export.py
 ```
 
 `07_validate.py` must pass before `08_export.py` runs. The `&&` operator enforces this — export is skipped automatically if validation fails.
+
+### 6. Validate a monthly run without changing PostgreSQL
+
+Pass the completed light-scraper run directory to the ingest step. Do not pass
+individual monthly CSV files.
+
+```bash
+python scripts/01_ingest.py --run-dir "path/to/data/runs/<run_id>"
+python scripts/02_audit_raw_data.py
+python scripts/03_clean_fields.py
+python scripts/04_deduplicate.py
+python scripts/05_flag_outliers.py
+python scripts/09_incremental_export.py
+```
+
+The last command is a dry run by default. It validates the cleaned rows and
+actions but does not open PostgreSQL.
+
+Before the first real monthly update, apply the run-ledger migration once:
+
+```bash
+psql -U postgres -d your_database -f sql/01_incremental_runs.sql
+```
+
+After you confirm the database backup and review the dry-run counts, apply the
+same staged run:
+
+```bash
+python scripts/09_incremental_export.py --apply
+```
+
+The updater uses one transaction. It never runs `TRUNCATE`, refuses a repeated
+`run_id`, checks existing `listing_id` and price values, and rolls back the
+whole run if any row fails.
 
 
 ## 🛠️ Technologies Used

@@ -1,134 +1,62 @@
 # =============================================================================
-# real_estate_cleaning — Deduplicate
-# Source: df_clean.pkl (output of 03_clean_fields.py)
-# Purpose: Deduplicate listings by source_id, keeping the row with the latest
-#          scraped_at. Populates date_last_checked. Sets status_changed_at to
-#          NULL on first load; on incremental runs, sets it only when status flips.
-# Task:    10
+# real_estate_cleaning — Prepare Listing Changes
+# Purpose: Apply mode-specific change semantics after field cleaning.
+#          Full rebuild deduplicates historical observations. Incremental mode
+#          trusts the validated scraper action file.
 # Run after: 03_clean_fields.py
 # =============================================================================
 
+import json
 from pathlib import Path
+import sys
+
 import pandas as pd
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from pipeline.change_semantics import prepare_full_rebuild, prepare_incremental
+
+
 CLEAN_PATH = Path("data/clean")
+WORK_PATH = Path("data/work")
 
-# =============================================================================
-# LOAD
-# =============================================================================
 
-df = pd.read_pickle(CLEAN_PATH / "df_clean.pkl")
+def main():
+    clean_path = CLEAN_PATH / "df_clean.pkl"
+    context_path = WORK_PATH / "run_context.json"
+    if not clean_path.is_file():
+        raise FileNotFoundError("Missing data/clean/df_clean.pkl. Run 03_clean_fields.py first.")
+    if not context_path.is_file():
+        raise FileNotFoundError("Missing data/work/run_context.json. Run 01_ingest.py first.")
 
-print(f"Loaded: {len(df):,} rows | {df['source_id'].nunique():,} unique source_ids")
+    cleaned = pd.read_pickle(clean_path)
+    with context_path.open(encoding="utf-8") as file:
+        context = json.load(file)
 
-# =============================================================================
-# AUDIT — duplicates before dedup
-# =============================================================================
-
-n_dupes = len(df) - df["source_id"].nunique()
-dupe_mask = df.duplicated(subset=["source_id"], keep=False)
-dupe_groups = df[dupe_mask].groupby("source_id")
-
-print(f"\nDuplicate source_ids: {n_dupes:,} extra rows across {dupe_groups.ngroups:,} groups")
-
-# Classify groups: identical-except-scraped_at vs meaningful differences
-check_cols = [c for c in df.columns if c != "scraped_at"]
-
-identical_count = 0
-meaningful_count = 0
-meaningful_ids = []
-
-for sid, group in dupe_groups:
-    if group[check_cols].nunique().max() == 1:
-        identical_count += 1
+    mode = context.get("mode")
+    if mode == "full_rebuild":
+        prepared = prepare_full_rebuild(cleaned)
+    elif mode == "incremental":
+        actions_path = WORK_PATH / "df_actions.pkl"
+        if not actions_path.is_file():
+            raise FileNotFoundError("Missing data/work/df_actions.pkl. Run 01_ingest.py first.")
+        actions = pd.read_pickle(actions_path)
+        prepared = prepare_incremental(cleaned, actions)
     else:
-        meaningful_count += 1
-        meaningful_ids.append(sid)
+        raise ValueError(f"Unsupported cleaning mode: {mode!r}")
 
-print(f"  Identical except scraped_at: {identical_count:,}")
-print(f"  Meaningful differences:      {meaningful_count:,}")
+    CLEAN_PATH.mkdir(parents=True, exist_ok=True)
+    prepared.listings.to_pickle(CLEAN_PATH / "df_dedup.pkl")
+    prepared.price_history.to_pickle(CLEAN_PATH / "df_price_history_staging.pkl")
+    prepared.missing_actions.to_pickle(CLEAN_PATH / "df_missing_actions.pkl")
 
-if meaningful_ids:
-    print("\n  Meaningful duplicate groups (fields that differ):")
-    for sid in meaningful_ids:
-        group = df[df["source_id"] == sid]
-        diff_cols = [c for c in check_cols if group[c].nunique() > 1]
-        print(f"    source_id={sid} | diff cols: {diff_cols}")
+    print(f"Mode: {mode}")
+    print(f"Prepared listing rows: {len(prepared.listings):,}")
+    print(f"Price changes: {len(prepared.price_history):,}")
+    print(f"Missing actions: {len(prepared.missing_actions):,}")
 
-# =============================================================================
-# PRICE HISTORY — capture price changes before dedup
-# For every source_id that appears more than once with different prices,
-# record the old price, new price, and when the change was detected.
-# listing_id is not available yet — 06_normalize.py will join it in.
-# =============================================================================
 
-price_history_rows = []
-
-for sid, group in dupe_groups:
-    if "price" not in [c for c in check_cols if group[c].nunique() > 1]:
-        continue
-    group_sorted = group.sort_values("scraped_at")
-    old_row = group_sorted.iloc[0]
-    new_row = group_sorted.iloc[-1]
-    old_price = old_row["price"]
-    new_price = new_row["price"]
-    if old_price != new_price:
-        price_history_rows.append({
-            "source_id":  sid,
-            "old_price":  old_price,
-            "new_price":  new_price,
-            "changed_at": new_row["scraped_at"],
-        })
-
-df_price_history_staging = pd.DataFrame(price_history_rows)
-staging_path = CLEAN_PATH / "df_price_history_staging.pkl"
-df_price_history_staging.to_pickle(staging_path)
-print(f"\nPrice history staging: {len(df_price_history_staging):,} price changes captured")
-
-# =============================================================================
-# DEDUPLICATE — keep row with latest scraped_at per source_id
-# =============================================================================
-
-# date_last_checked = scraped_at of the latest row in the group (same as the
-# row we keep, since we sort descending and take first)
-df = df.sort_values("scraped_at", ascending=False)
-df_dedup = df.drop_duplicates(subset=["source_id"], keep="first").copy()
-
-# date_last_checked = scraped_at of the latest row kept after dedup.
-df_dedup["date_last_checked"] = df_dedup["scraped_at"]
-
-# status_changed_at — NULL on first load.
-# On incremental runs, the upsert in 08_export.py sets this only when
-# status flips between active and inactive.
-df_dedup["status_changed_at"] = pd.NaT
-
-print(f"\nAfter dedup: {len(df_dedup):,} rows")
-print(f"Rows removed: {len(df) - len(df_dedup):,}")
-
-# Sanity check — should be zero
-remaining_dupes = df_dedup["source_id"].duplicated().sum()
-if remaining_dupes > 0:
-    raise ValueError(f"Dedup failed — {remaining_dupes} duplicate source_ids remain")
-print("Dedup sanity check passed — zero duplicate source_ids remain")
-
-# =============================================================================
-# AUDIT — post-dedup shape
-# =============================================================================
-
-print(f"\n=== POST-DEDUP SUMMARY ===")
-print(f"Shape: {df_dedup.shape}")
-print(f"\ntransaction_type:\n{df_dedup['transaction_type'].value_counts()}")
-print(f"\nstatus:\n{df_dedup['status'].value_counts(dropna=False)}")
-print(f"\nscraped_at range: {df_dedup['scraped_at'].min()} → {df_dedup['scraped_at'].max()}")
-print(f"date_last_checked range: {df_dedup['date_last_checked'].min()} → {df_dedup['date_last_checked'].max()}")
-print(f"status_changed_at nulls: {df_dedup['status_changed_at'].isna().sum():,} (expected: {len(df_dedup):,})")
-
-# =============================================================================
-# SAVE
-# =============================================================================
-
-output_path = CLEAN_PATH / "df_dedup.pkl"
-df_dedup.to_pickle(output_path)
-
-print(f"\ndf_dedup saved to: {output_path}")
-print(f"Columns: {list(df_dedup.columns)}")
+if __name__ == "__main__":
+    main()

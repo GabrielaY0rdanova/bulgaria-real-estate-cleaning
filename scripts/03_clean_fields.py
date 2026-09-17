@@ -11,50 +11,26 @@ from pathlib import Path
 import re
 import pandas as pd
 
-DATA_PATH = Path("data/raw")
+WORK_PATH = Path("data/work")
 CLEAN_PATH = Path("data/clean")
 CLEAN_PATH.mkdir(exist_ok=True)
 
 # =============================================================================
-# LOAD — replicate ingest to produce df_staging
+# LOAD — use the exact staging artifact produced by 01_ingest.py
 # =============================================================================
 
-prodazhbi_files = list(DATA_PATH.glob("prodazhbi_*.csv"))
-naemi_files = list(DATA_PATH.glob("naemi_*.csv"))
+staging_path = WORK_PATH / "df_staging.pkl"
+if not staging_path.is_file():
+    raise FileNotFoundError("Missing data/work/df_staging.pkl. Run 01_ingest.py first.")
+df = pd.read_pickle(staging_path)
+PHONE_COLUMNS = ("agency_phone", "phone", "contact_phone")
 
-if len(prodazhbi_files) == 0:
-    raise FileNotFoundError("No prodazhbi CSV found in data/raw/")
-if len(naemi_files) == 0:
-    raise FileNotFoundError("No naemi CSV found in data/raw/")
-prodazhbi_files = [max(prodazhbi_files, key=lambda p: p.stat().st_mtime)]
-naemi_files = [max(naemi_files, key=lambda p: p.stat().st_mtime)]
-
-PHONE_COLUMNS = ["agency_phone", "phone", "contact_phone"]
-
-df_prod = pd.read_csv(
-    prodazhbi_files[0],
-    low_memory=False,
-    dtype={col: "string" for col in PHONE_COLUMNS if col}
+transaction_counts = df["transaction_type"].value_counts().to_dict()
+print(
+    f"Loaded: {len(df):,} rows "
+    f"({transaction_counts.get('sale', 0):,} sales + "
+    f"{transaction_counts.get('rental', 0):,} rentals)"
 )
-
-df_naem = pd.read_csv(
-    naemi_files[0],
-    low_memory=False,
-    dtype={col: "string" for col in PHONE_COLUMNS if col}
-)
-
-df_prod["transaction_type"] = "sale"
-df_naem["transaction_type"] = "rental"
-
-df = pd.concat([df_prod, df_naem], ignore_index=True)
-
-# Drop rows where the scraper failed to extract data (property_type == "unknown").
-unknown_mask = df["property_type"] == "unknown"
-if unknown_mask.any():
-    print(f"Dropping {unknown_mask.sum():,} rows with property_type == 'unknown' (failed scrapes)")
-    df = df[~unknown_mask].reset_index(drop=True)
-
-print(f"Loaded: {len(df):,} rows ({len(df_prod):,} sales + {len(df_naem):,} rentals)")
 
 # =============================================================================
 # MAPPING DICTS
