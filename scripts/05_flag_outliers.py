@@ -9,7 +9,14 @@
 # =============================================================================
 
 from pathlib import Path
+import sys
 import pandas as pd
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from pipeline.outliers import add_outlier_flags
 
 CLEAN_PATH = Path("data/clean")
 DOCS_PATH = Path("docs")
@@ -24,44 +31,15 @@ df = pd.read_pickle(CLEAN_PATH / "df_dedup.pkl")
 print(f"Loaded: {len(df):,} rows")
 
 # =============================================================================
-# HELPERS
+# FLAG — shared, market-aware rules
 # =============================================================================
 
-def iqr_bounds(series: pd.Series, k: float = 3.0) -> tuple[float, float]:
-    """
-    Return (lower, upper) outlier bounds using k * IQR rule.
-    k=3.0 is used instead of the standard 1.5 — real estate prices have
-    naturally wide distributions and we only want to flag extreme values,
-    not aggressively trim the tails.
-    """
-    q1 = series.quantile(0.25)
-    q3 = series.quantile(0.75)
-    iqr = q3 - q1
-    return q1 - k * iqr, q3 + k * iqr
+YEAR_MIN = 1800
+YEAR_MAX_HARD = 2040
+CURRENT_YEAR = pd.Timestamp.now().year
 
-
-def flag_iqr_outliers(series: pd.Series, k: float = 3.0) -> pd.Series:
-    """Return a boolean Series — True where value is outside k*IQR bounds."""
-    lower, upper = iqr_bounds(series, k)
-    return (series < lower) | (series > upper)
-
-# =============================================================================
-# FLAG — price (per property_type_en group)
-# Rationale: a €2M apartment is suspicious; a €2M hotel is not.
-# Only applied to rows where price is not null and not price_on_request.
-# =============================================================================
-
-df["price_outlier"] = False
-
+df = add_outlier_flags(df, current_year=CURRENT_YEAR)
 price_mask = df["price"].notna() & ~df["price_on_request"]
-price_data = df.loc[price_mask, ["price", "property_type_en"]].copy()
-
-for prop_type, group in price_data.groupby("property_type_en"):
-    if len(group) < 10:
-        # Too few rows to compute meaningful IQR — skip flagging for this type
-        continue
-    outlier_flags = flag_iqr_outliers(group["price"])
-    df.loc[outlier_flags[outlier_flags].index, "price_outlier"] = True
 
 print(f"\nprice_outlier — flagged: {df['price_outlier'].sum():,} "
       f"({df['price_outlier'].mean()*100:.2f}% of all rows)")
@@ -71,15 +49,8 @@ print(f"\nprice_outlier — flagged: {df['price_outlier'].sum():,} "
 # area_m2 = 0 always flagged regardless of IQR.
 # =============================================================================
 
-df["area_outlier"] = False
-
 area_mask = df["area_m2"].notna()
-area_flags = flag_iqr_outliers(df.loc[area_mask, "area_m2"])
-df.loc[area_flags[area_flags].index, "area_outlier"] = True
-
-# area_m2 = 0 is always an outlier (meaningless)
 zero_area_mask = df["area_m2"] == 0
-df.loc[zero_area_mask, "area_outlier"] = True
 
 print(f"area_outlier  — flagged: {df['area_outlier'].sum():,} "
       f"({df['area_outlier'].mean()*100:.2f}% of all rows)")
@@ -88,28 +59,6 @@ print(f"area_outlier  — flagged: {df['area_outlier'].sum():,} "
 # FLAG — year_built (range check)
 # Anything before 1800 or after current year is implausible.
 # =============================================================================
-
-YEAR_MIN = 1800
-CURRENT_YEAR = pd.Timestamp.now().year
-
-# Hard cap for sanity (extreme future values)
-YEAR_MAX_HARD = 2040
-
-df["year_built_outlier"] = False
-
-year_mask = df["year_built"].notna()
-
-# Flag true outliers (past + extreme future)
-year_flags = (
-    (df.loc[year_mask, "year_built"] < YEAR_MIN) |
-    (df.loc[year_mask, "year_built"] > YEAR_MAX_HARD)
-)
-df.loc[year_flags[year_flags].index, "year_built_outlier"] = True
-
-# New feature: future / under-construction properties
-df["is_future_property"] = False
-future_mask = df["year_built"] > CURRENT_YEAR
-df.loc[future_mask, "is_future_property"] = True
 
 print(f"year_built_outlier — flagged: {df['year_built_outlier'].sum():,} "
       f"({df['year_built_outlier'].mean()*100:.2f}% of all rows)")
@@ -129,7 +78,7 @@ lines.append("Outliers are **flagged, not removed**. "
 
 # --- price ---
 lines.append("\n---\n\n## Price Outliers\n")
-lines.append("**Method:** IQR × 3.0 applied per `property_type_en` group. "
+lines.append("**Method:** IQR × 3.0 applied per transaction and property type. "
              "Groups with fewer than 10 rows skipped.\n")
 lines.append(f"**Total flagged:** {df['price_outlier'].sum():,}\n")
 
@@ -171,12 +120,10 @@ for _, row in top_price.iterrows():
 
 # --- area_m2 ---
 lines.append("\n---\n\n## Area Outliers\n")
-lines.append("**Method:** Global IQR × 3.0. Values of 0 always flagged.\n")
+lines.append("**Method:** IQR × 3.0 applied per property type. "
+             "Values of 0 are always flagged.\n")
 lines.append(f"**Total flagged:** {df['area_outlier'].sum():,}\n")
 
-area_data = df.loc[df["area_m2"].notna(), "area_m2"]
-lower, upper = iqr_bounds(area_data)
-lines.append(f"- IQR bounds: {lower:.1f} m² → {upper:.1f} m²")
 lines.append(f"- Zero area rows: {zero_area_mask.sum():,}")
 
 flagged_area = df.loc[df["area_outlier"] & df["area_m2"].notna(), "area_m2"]
