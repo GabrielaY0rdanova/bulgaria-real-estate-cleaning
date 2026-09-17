@@ -139,12 +139,11 @@ lines.append("|---|---|---|---|")
 
 price_summary = (
     df[price_mask]
-    .groupby("property_type_en")
-    .apply(lambda g: pd.Series({
-        "total": len(g),
-        "flagged": g["price_outlier"].sum(),
-    }))
-    .reset_index()
+    .groupby("property_type_en", as_index=False)
+    .agg(
+        total=("source_id", "size"),
+        flagged=("price_outlier", "sum"),
+    )
 )
 price_summary["flag_pct"] = (price_summary["flagged"] / price_summary["total"] * 100).round(1)
 price_summary = price_summary.sort_values("flagged", ascending=False)
@@ -181,7 +180,7 @@ lines.append(f"- IQR bounds: {lower:.1f} m² → {upper:.1f} m²")
 lines.append(f"- Zero area rows: {zero_area_mask.sum():,}")
 
 flagged_area = df.loc[df["area_outlier"] & df["area_m2"].notna(), "area_m2"]
-lines.append(f"\n### Distribution of flagged area values")
+lines.append("\n### Distribution of flagged area values")
 lines.append(f"- Min: {flagged_area.min():,.1f} m²")
 lines.append(f"- Max: {flagged_area.max():,.1f} m²")
 lines.append(f"- Median: {flagged_area.median():,.1f} m²")
@@ -245,4 +244,4 @@ df.to_pickle(output_path)
 
 print(f"df_flagged saved to: {output_path}")
 print(f"Shape: {df.shape}")
-print(f"New columns: price_outlier, area_outlier, year_built_outlier, is_future_property")
+print("New columns: price_outlier, area_outlier, year_built_outlier, is_future_property")

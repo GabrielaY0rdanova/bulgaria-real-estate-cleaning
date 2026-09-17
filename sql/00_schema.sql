@@ -13,6 +13,8 @@
 -- IF EXISTS prevents errors on first run against an empty database.
 -- =============================================================================
 
+DROP TABLE IF EXISTS pipeline_runs CASCADE;
+DROP TABLE IF EXISTS price_history CASCADE;
 DROP TABLE IF EXISTS property_features CASCADE;
 DROP TABLE IF EXISTS listings CASCADE;
 DROP TABLE IF EXISTS properties CASCADE;

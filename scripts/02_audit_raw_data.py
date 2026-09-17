@@ -85,8 +85,19 @@ lines = []
 # Header
 # -----------------------------------------------------------------------------
 lines.append("# Audit Report — Raw Staging Data")
-lines.append(f"\n**Run ID:** `{run_context['run_id']}`")
-lines.append(f"**Run directory:** `{run_context['run_dir']}`")
+run_mode = run_context.get("mode")
+lines.append(f"\n**Run mode:** `{run_mode}`")
+if run_mode == "incremental":
+    lines.append(f"**Run ID:** `{run_context['run_id']}`")
+    lines.append(f"**Run directory:** `{run_context['run_dir']}`")
+elif run_mode == "full_rebuild":
+    lines.append(f"**Input files:** {len(run_context.get('sources', []))}")
+    lines.append(
+        f"**Rows rejected before staging:** "
+        f"{run_context.get('rejected_unknown_rows', 0):,}"
+    )
+else:
+    raise ValueError(f"Unsupported run mode in run_context.json: {run_mode}")
 lines.append(
     f"**Total rows:** {len(df_staging):,} "
     f"({transaction_counts.get('sale', 0):,} sales + "
