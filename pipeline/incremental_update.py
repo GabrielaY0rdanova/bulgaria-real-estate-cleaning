@@ -48,12 +48,14 @@ def parse_actions(rows: Iterable[Mapping]) -> list[Action]:
             raise ValueError(f"Unsupported action for {source_id}: {action}")
 
         listing_id = _optional_int(row.get("listing_id"))
+        old_price = _optional_price(row.get("old_price"))
+        new_price = _optional_price(row.get("new_price"))
         if action == "new" and listing_id is not None:
             raise ValueError(f"New action already has listing_id: {source_id}")
         if action in EXISTING_ACTIONS and listing_id is None:
             raise ValueError(f"{action} action has no listing_id: {source_id}")
-        if action == "changed" and _same_value(row.get("old_price"), row.get("new_price")):
-            raise ValueError(f"Changed action has identical prices: {source_id}")
+        if action == "changed" and _same_value(old_price, new_price):
+            action = "refreshed"
         if row.get("observed_at") in (None, ""):
             raise ValueError(f"Action has no observed_at: {source_id}")
 
@@ -62,8 +64,8 @@ def parse_actions(rows: Iterable[Mapping]) -> list[Action]:
             source_id=source_id,
             listing_id=listing_id,
             action=action,
-            old_price=row.get("old_price"),
-            new_price=row.get("new_price"),
+            old_price=old_price,
+            new_price=new_price,
             observed_at=row.get("observed_at"),
         ))
     return actions
@@ -251,6 +253,22 @@ def _optional_int(value) -> int | None:
     if not number.is_integer():
         raise ValueError(f"Invalid listing_id: {value}")
     return int(number)
+
+
+def _optional_price(value) -> Decimal | None:
+    if _is_missing(value):
+        return None
+    text = str(value).strip()
+    if "запитване" in text.lower():
+        return None
+    cleaned = "".join(text.split()).replace("€", "").replace("$", "")
+    try:
+        number = Decimal(cleaned)
+    except InvalidOperation as exc:
+        raise ValueError(f"Invalid price: {value}") from exc
+    if not number.is_finite():
+        raise ValueError(f"Invalid price: {value}")
+    return number
 
 
 def _same_value(left, right) -> bool:

@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 import pytest
 
 from pipeline.incremental_update import (
@@ -31,6 +33,29 @@ def test_parse_actions_accepts_pandas_nan_for_new_listing_id():
     assert actions[0].listing_id is None
 
 
+def test_parse_actions_normalises_raw_scraper_prices():
+    action = parse_actions([
+        row(action="changed", old_price="52 200.00", new_price="52 100 €")
+    ])[0]
+
+    assert action.old_price == Decimal("52200.00")
+    assert action.new_price == Decimal("52100")
+
+
+def test_parse_actions_normalises_missing_prices():
+    action = parse_actions([
+        row(action="refreshed", old_price=float("nan"), new_price="Цена при запитване")
+    ])[0]
+
+    assert action.old_price is None
+    assert action.new_price is None
+
+
+def test_parse_actions_rejects_invalid_price_text():
+    with pytest.raises(ValueError, match="Invalid price"):
+        parse_actions([row(new_price="not-a-price")])
+
+
 def test_parse_actions_requires_listing_id_for_existing_action():
     with pytest.raises(ValueError, match="has no listing_id"):
         parse_actions([row(action="missing", listing_id="")])
@@ -41,9 +66,10 @@ def test_parse_actions_rejects_duplicate_source_id():
         parse_actions([row(), row()])
 
 
-def test_parse_actions_rejects_fake_price_change():
-    with pytest.raises(ValueError, match="identical prices"):
-        parse_actions([row(action="changed")])
+def test_parse_actions_reclassifies_fake_price_change_as_refreshed():
+    action = parse_actions([row(action="changed")])[0]
+
+    assert action.action == "refreshed"
 
 
 def test_database_state_matches_action_listing_id():
