@@ -2,7 +2,7 @@ from io import StringIO
 
 import pytest
 
-from pipeline.database_snapshot import count_csv_rows, require_database
+from pipeline.database_snapshot import TABLE_SELECTS, count_csv_rows, require_database
 
 
 class DatabaseCursor:
@@ -31,3 +31,11 @@ def test_require_database_accepts_exact_name():
 def test_require_database_rejects_different_name():
     with pytest.raises(ValueError, match="expected 'real_estate_v2'"):
         require_database(DatabaseCursor("old_database"), "real_estate_v2")
+
+
+def test_snapshot_preserves_boolean_csv_contract():
+    assert "AS price_on_request" in TABLE_SELECTS["listings"]
+    assert "AS has_photos" in TABLE_SELECTS["listings"]
+    assert "AS gas" in TABLE_SELECTS["properties"]
+    assert "'True'" in TABLE_SELECTS["listings"]
+    assert "'False'" in TABLE_SELECTS["properties"]

@@ -21,6 +21,27 @@ TABLE_EXPORTS = (
     ("price_history", "price_history.csv", "history_id"),
 )
 
+TABLE_SELECTS = {
+    "properties": """
+        property_id, geo_id, property_type_id, construction_type_id,
+        bedrooms, area_m2, floor, total_floors, construction_status,
+        year_built,
+        CASE WHEN gas IS TRUE THEN 'True'
+             WHEN gas IS FALSE THEN 'False' END AS gas,
+        tec
+    """,
+    "listings": """
+        listing_id, source_id, property_id, contact_id, transaction_type,
+        listing_tier, listing_url, price,
+        CASE WHEN price_on_request IS TRUE THEN 'True'
+             WHEN price_on_request IS FALSE THEN 'False' END AS price_on_request,
+        date_posted, date_modified,
+        CASE WHEN has_photos IS TRUE THEN 'True'
+             WHEN has_photos IS FALSE THEN 'False' END AS has_photos,
+        status, status_changed_at, scraped_at, date_last_checked
+    """,
+}
+
 
 def export_database_snapshot(connection, output_dir: str | Path) -> dict[str, int]:
     """Export and validate every table before replacing existing CSV files."""
@@ -36,9 +57,10 @@ def export_database_snapshot(connection, output_dir: str | Path) -> dict[str, in
                 cursor.execute(f"SELECT COUNT(*) FROM {table}")
                 expected = cursor.fetchone()[0]
                 staged_path = staging / filename
+                select_list = TABLE_SELECTS.get(table, "*")
                 with staged_path.open("w", encoding="utf-8-sig", newline="") as file:
                     cursor.copy_expert(
-                        f"COPY (SELECT * FROM {table} ORDER BY {order_by}) "
+                        f"COPY (SELECT {select_list} FROM {table} ORDER BY {order_by}) "
                         "TO STDOUT WITH (FORMAT CSV, HEADER TRUE)",
                         file,
                     )
