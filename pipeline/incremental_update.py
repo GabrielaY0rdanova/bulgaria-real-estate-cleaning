@@ -117,7 +117,7 @@ def apply_incremental_run(
         cursor.execute(
             """
             UPDATE pipeline_runs
-               SET status = 'complete', finished_at = CURRENT_TIMESTAMP
+               SET status = 'complete', finished_at = clock_timestamp()
              WHERE run_id = %s
             """,
             (run_id,),

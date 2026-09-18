@@ -172,6 +172,7 @@ def test_apply_incremental_run_commits_missing_update_atomically():
     assert connection.cursor_instance.closed is True
     assert any("SET status = 'inactive'" in query for query, _ in connection.cursor_instance.queries)
     assert any("SET status = 'complete'" in query for query, _ in connection.cursor_instance.queries)
+    assert any("finished_at = clock_timestamp()" in query for query, _ in connection.cursor_instance.queries)
 
 
 def test_apply_incremental_run_rolls_back_writer_failure():

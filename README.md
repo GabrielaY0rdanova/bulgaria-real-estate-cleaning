@@ -255,11 +255,14 @@ same staged run:
 
 ```bash
 python scripts/09_incremental_export.py --apply
+python scripts/10_export_database_snapshot.py --target-database your_database
 ```
 
 The updater uses one transaction. It never runs `TRUNCATE`, refuses a repeated
 `run_id`, checks existing `listing_id` and price values, and rolls back the
-whole run if any row fails.
+whole run if any row fails. The final command opens the database in read-only
+mode and exports all normalized tables to temporary files. Existing clean CSVs
+are replaced only after every table passes its row-count check.
 
 
 ## 🛠️ Technologies Used
