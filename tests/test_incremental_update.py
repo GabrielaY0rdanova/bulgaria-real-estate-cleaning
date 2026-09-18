@@ -26,6 +26,11 @@ def test_parse_actions_accepts_new_without_listing_id():
     assert actions[0].listing_id is None
 
 
+def test_parse_actions_accepts_pandas_nan_for_new_listing_id():
+    actions = parse_actions([row(action="new", listing_id=float("nan"))])
+    assert actions[0].listing_id is None
+
+
 def test_parse_actions_requires_listing_id_for_existing_action():
     with pytest.raises(ValueError, match="has no listing_id"):
         parse_actions([row(action="missing", listing_id="")])

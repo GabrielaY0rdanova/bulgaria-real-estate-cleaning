@@ -9,7 +9,15 @@
 
 from pathlib import Path
 import re
+import sys
+
 import pandas as pd
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from pipeline.datetime_parsing import parse_mixed_utc
 
 WORK_PATH = Path("data/work")
 CLEAN_PATH = Path("data/clean")
@@ -131,6 +139,7 @@ LOCALITY_TYPE_MAP = {
     "град":         "city",
     "село":         "village",
     "к.к.":         "resort_complex",
+    "к-г":          "campground",
     "м-т":          "area",
     "м-ст":         "area",
     "магистрала":   "highway",
@@ -418,10 +427,10 @@ print(f"bedrooms — value counts:\n{df['bedrooms'].value_counts(dropna=False)}"
 
 # =============================================================================
 # CLEAN — scraped_at
-# Convert to Timestamp (already ISO format, just needs parsing)
+# Convert scraper and DB-restored timestamp variants to UTC.
 # =============================================================================
 
-df["scraped_at"] = pd.to_datetime(df["scraped_at"], utc=True)
+df["scraped_at"] = parse_mixed_utc(df["scraped_at"])
 
 print(f"scraped_at — min: {df['scraped_at'].min()} | max: {df['scraped_at'].max()}")
 

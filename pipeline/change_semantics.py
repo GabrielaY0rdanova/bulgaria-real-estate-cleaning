@@ -70,8 +70,13 @@ def prepare_incremental(cleaned: pd.DataFrame, actions: pd.DataFrame) -> Prepare
     row_ids = set(cleaned["source_id"].astype(str))
     if not output_action_ids.issubset(row_ids):
         raise ValueError("Incremental output actions are missing cleaned listing rows")
+    unexpected_row_ids = row_ids - action_ids
+    if unexpected_row_ids:
+        raise ValueError("Incremental cleaned rows have no matching action")
 
-    listings = cleaned.copy()
+    listings = cleaned.loc[
+        cleaned["source_id"].astype(str).isin(output_action_ids)
+    ].copy()
     listings["date_last_checked"] = listings["scraped_at"]
     listings["status_changed_at"] = pd.NaT
 

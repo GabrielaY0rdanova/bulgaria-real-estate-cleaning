@@ -46,6 +46,10 @@ def test_incremental_uses_actions_for_price_history_and_missing_rows():
             "source_id": "new", "scraped_at": pd.Timestamp("2026-09-17", tz="UTC"),
             "status": "active", "price": 50,
         },
+        {
+            "source_id": "gone", "scraped_at": pd.Timestamp("2026-04-01", tz="UTC"),
+            "status": "active", "price": 75,
+        },
     ])
     actions = pd.DataFrame([
         {
@@ -71,6 +75,7 @@ def test_incremental_uses_actions_for_price_history_and_missing_rows():
         "source_id": "gone", "listing_id": 2.0,
         "observed_at": "2026-09-17T08:00:00Z",
     }]
+    assert set(prepared.listings["source_id"]) == {"changed", "new"}
     assert prepared.listings["date_last_checked"].equals(prepared.listings["scraped_at"])
 
 

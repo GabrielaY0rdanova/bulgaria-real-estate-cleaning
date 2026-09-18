@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
+import math
 from pathlib import Path
 from typing import Callable, Iterable, Mapping
 
@@ -243,6 +244,10 @@ def _optional_int(value) -> int | None:
         number = float(value)
     except (TypeError, ValueError) as exc:
         raise ValueError(f"Invalid listing_id: {value}") from exc
+    if math.isnan(number):
+        return None
+    if not math.isfinite(number):
+        raise ValueError(f"Invalid listing_id: {value}")
     if not number.is_integer():
         raise ValueError(f"Invalid listing_id: {value}")
     return int(number)
