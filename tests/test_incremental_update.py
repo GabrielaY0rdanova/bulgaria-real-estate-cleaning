@@ -51,6 +51,14 @@ def test_database_state_matches_action_listing_id():
     _validate_database_state([action], {"abc": (12, "active", 100)})
 
 
+def test_database_state_treats_nan_and_null_prices_as_equal():
+    action = parse_actions([
+        row(action="changed", old_price=float("nan"), new_price="100")
+    ])[0]
+
+    _validate_database_state([action], {"abc": (12, "active", None)})
+
+
 def test_database_state_rejects_listing_id_mismatch():
     action = parse_actions([row()])[0]
     with pytest.raises(Exception, match="listing_id mismatch"):

@@ -254,14 +254,27 @@ def _optional_int(value) -> int | None:
 
 
 def _same_value(left, right) -> bool:
-    if left in (None, "") and right in (None, ""):
+    left_missing = _is_missing(left)
+    right_missing = _is_missing(right)
+    if left_missing and right_missing:
         return True
-    if left in (None, "") or right in (None, ""):
+    if left_missing or right_missing:
         return False
     try:
         return Decimal(str(left)) == Decimal(str(right))
     except InvalidOperation:
         return str(left) == str(right)
+
+
+def _is_missing(value) -> bool:
+    if value is None:
+        return True
+    if isinstance(value, str) and value == "":
+        return True
+    try:
+        return bool(math.isnan(value))
+    except (TypeError, ValueError):
+        return False
 
 
 class DatabaseEntityWriter:
