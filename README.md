@@ -13,7 +13,7 @@
 
 A sequential Python cleaning pipeline for raw real estate listings scraped from [imot.bg](https://www.imot.bg) by the [bulgaria-real-estate-scraper](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-scraper).
 
-Takes two flat CSVs (sales + rentals) as input and produces eight normalised, validated relational tables ready for PostgreSQL. Handles field parsing, Bulgarian-to-English translation and transliteration, deduplication, outlier flagging, and a pre-export validation gate.
+Supports two workflows. A full rebuild combines explicitly ordered historical sales and rental CSV files. A monthly update consumes one completed light-scraper run directory and applies its actions in a single PostgreSQL transaction. The pipeline handles field parsing, translation, transliteration, deduplication, outlier flagging and validation.
 
 Part of a larger **Real Estate Data Platform**: [`real_estate_scraper`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-scraper) → [`real_estate_cleaning`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-cleaning) → [`real_estate_analysis`](https://github.com/GabrielaY0rdanova/bulgaria-real-estate-analysis) → `real_estate_visualization`
 
@@ -27,7 +27,7 @@ Part of a larger **Real Estate Data Platform**: [`real_estate_scraper`](https://
 | `prodazhbi_05_05_2026.csv` | 45,186 | Sales | Incremental update |
 | `naemi_07_05_2026.csv` | 19,038 | Rentals | Incremental update |
 
-Combined input: **263,720 rows** — deduplicated to **61,487 unique listings** across 9 normalised tables.
+The current database snapshot, after the September 2026 catch-up and rental recovery runs, contains **351,188 historical listings**. Of these, **207,146 are active**: 169,037 sales and 38,109 rentals. Historical files remain available so status transitions and price changes are preserved.
 
 The raw and cleaned datasets are published on Kaggle: [Bulgaria Real Estate Listings](https://www.kaggle.com/datasets/gabrielagencheva/bulgaria-real-estate-listings)
 
@@ -47,7 +47,8 @@ bulgaria-real-estate-cleaning/
 │   ├── 06_normalize.py         # Split into 8 relational tables → CSVs
 │   ├── 07_validate.py          # Pre-export validation gate → validation_report.md
 │   ├── 08_export.py            # Full rebuild export only
-│   └── 09_incremental_export.py # Dry-run or transactional monthly update
+│   ├── 09_incremental_export.py # Dry-run or transactional monthly update
+│   └── 10_export_database_snapshot.py # Validated read-only CSV snapshot
 │
 ├── pipeline/                   # Input contract, staging and DB update logic
 ├── sql/
@@ -103,21 +104,21 @@ raw CSVs
 
 ## 🗃️ Schema
 
-Eight tables in PostgreSQL. See `scripts/00_schema.sql` for full DDL.
+Nine data tables plus the `pipeline_runs` ledger are stored in PostgreSQL. See `sql/00_schema.sql` and `sql/01_incremental_runs.sql` for the DDL.
 
 ![ERD](docs/erd.png)
 
 | Table | Rows | Description |
 |---|---|---|
-| `geographies` | 3,285 | Hierarchical: region → locality → area |
+| `geographies` | 4,598 | Hierarchical: region → locality → area |
 | `construction_types` | 6 | Lookup — brick, panel, timber frame, etc. |
 | `property_types` | 46 | Lookup — apartment, house, office, plot, etc. |
 | `features` | 46 | Lookup — elevator, furnished, parking, etc. |
-| `contacts` | 15,315 | Deduplicated agencies and owners |
-| `properties` | 61,487 | Physical asset — area, floor, year built, etc. |
-| `listings` | 61,487 | Advertisement — price, status, dates, URL |
-| `property_features` | 159,014 | Many-to-many: properties ↔ features |
-| `price_history` | 323 | Price changes detected between scraper runs |
+| `contacts` | 49,504 | Deduplicated agencies and owners |
+| `properties` | 351,188 | Physical attributes linked one-to-one with listings |
+| `listings` | 351,188 | Historical advertisements with active/inactive status |
+| `property_features` | 882,057 | Many-to-many property-feature relationships |
+| `price_history` | 49,458 | Recorded price transitions across scraper runs |
 
 
 ## 🔄 What Each Script Does
@@ -264,6 +265,10 @@ whole run if any row fails. The final command opens the database in read-only
 mode and exports all normalized tables to temporary files. Existing clean CSVs
 are replaced only after every table passes its row-count check.
 
+A transaction-specific recovery run, for example `--only naemi`, follows the
+same steps. Empty files for the excluded transaction are valid no-op inputs.
+The staging layer ignores those empty frames without changing inferred dtypes.
+
 
 ## 🛠️ Technologies Used
 
@@ -271,7 +276,7 @@ are replaced only after every table passes its row-count check.
 - **pandas 2.2** — all data processing
 - **psycopg2-binary** — PostgreSQL connection and bulk COPY
 - **python-dotenv** — database credentials management
-- **PostgreSQL 16** — target database with full relational schema
+- **PostgreSQL 18** — target database with full relational schema
 
 
 ## 💡 Notes
@@ -287,7 +292,7 @@ are replaced only after every table passes its row-count check.
 
 This cleaning pipeline is Stage 2 of a four-stage data platform:
 
-- ✅ `bulgaria-real-estate-scraper` — Scraping 263,720 listings from imot.bg across two runs
+- ✅ `bulgaria-real-estate-scraper` — Full collection, monthly updates and transaction-specific recovery runs
 - ✅ `bulgaria-real-estate-cleaning` — You are here
 - ✅ `bulgaria-real-estate-analysis` — Price distributions, geographic patterns, and feature uplift analysis
 - ✅ `bulgaria-real-estate-visualization` — Interactive Power BI dashboard

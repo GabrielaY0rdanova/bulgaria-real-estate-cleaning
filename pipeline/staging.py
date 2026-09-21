@@ -37,8 +37,8 @@ def stage_completed_run(run_dir: str | Path, work_dir: str | Path) -> RunInput:
         actions["transaction_type"] = TRANSACTION_ENUM[transaction_type]
         action_frames.append(actions)
 
-    staging = pd.concat(row_frames, ignore_index=True)
-    actions = pd.concat(action_frames, ignore_index=True)
+    staging = _concat_frames(row_frames)
+    actions = _concat_frames(action_frames)
 
     unknown_mask = staging["property_type"].eq("unknown")
     if unknown_mask.any():
@@ -63,6 +63,16 @@ def stage_completed_run(run_dir: str | Path, work_dir: str | Path) -> RunInput:
         destination / "run_context.json",
     )
     return run
+
+
+def _concat_frames(frames: list[pd.DataFrame]) -> pd.DataFrame:
+    """Combine transaction files without pandas' empty-frame dtype warning."""
+    nonempty = [frame for frame in frames if not frame.empty]
+    if nonempty:
+        return pd.concat(nonempty, ignore_index=True)
+    if not frames:
+        raise ValueError("No transaction frames were loaded")
+    return frames[0].iloc[0:0].copy()
 
 
 def stage_full_rebuild(raw_files: list[str | Path], work_dir: str | Path) -> dict:

@@ -1,5 +1,6 @@
 import csv
 import json
+import warnings
 
 import pandas as pd
 import pytest
@@ -168,6 +169,29 @@ def test_completed_run_is_staged_once_with_normalised_transaction_types(tmp_path
     assert context["run_id"] == run_dir.name
     assert context["row_count"] == 2
     assert context["action_count"] == 2
+
+
+def test_targeted_run_ignores_empty_transaction_without_future_warning(tmp_path):
+    run_dir = _make_run(tmp_path)
+    manifest_path = run_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest["transactions"]["prodazhbi"].update({
+        "expected_regions": [],
+        "completed_regions": [],
+    })
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    _write_csv(run_dir / "prodazhbi_rows.csv", ROW_COLUMNS, [])
+    _write_csv(run_dir / "prodazhbi_actions.csv", ACTION_COLUMNS, [])
+    _write_csv(run_dir / "prodazhbi_seen_ids.csv", SEEN_COLUMNS, [])
+
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", FutureWarning)
+        stage_completed_run(run_dir, tmp_path / "work")
+
+    staging = pd.read_pickle(tmp_path / "work" / "df_staging.pkl")
+    actions = pd.read_pickle(tmp_path / "work" / "df_actions.pkl")
+    assert set(staging["transaction_type"]) == {"rental"}
+    assert set(actions["transaction_type"]) == {"rental"}
 
 
 def test_full_rebuild_uses_explicit_file_order_and_records_hashes(tmp_path):
