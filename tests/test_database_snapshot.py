@@ -25,12 +25,12 @@ def test_count_csv_rows_handles_quoted_line_breaks(tmp_path):
 
 
 def test_require_database_accepts_exact_name():
-    require_database(DatabaseCursor("real_estate_v2"), "real_estate_v2")
+    require_database(DatabaseCursor("bulgaria_real_estate"), "bulgaria_real_estate")
 
 
 def test_require_database_rejects_different_name():
-    with pytest.raises(ValueError, match="expected 'real_estate_v2'"):
-        require_database(DatabaseCursor("old_database"), "real_estate_v2")
+    with pytest.raises(ValueError, match="expected 'bulgaria_real_estate'"):
+        require_database(DatabaseCursor("old_database"), "bulgaria_real_estate")
 
 
 def test_snapshot_preserves_boolean_csv_contract():
